@@ -121,12 +121,14 @@ public class DseGSSAPIAuthProvider implements AuthProvider {
 
     private final String saslProtocol;
 
+    private final Subject subject;
+
     /**
      * Creates an instance of {@code DseGSSAPIAuthProvider} with default login configuration options and default
      * SASL protocol name ({@value #DEFAULT_SASL_PROTOCOL_NAME}).
      */
     public DseGSSAPIAuthProvider() {
-        this(null, null);
+        this((Configuration) null, null);
     }
 
     /**
@@ -147,7 +149,7 @@ public class DseGSSAPIAuthProvider implements AuthProvider {
      *                     Kerberos service principal used by the DSE server.
      */
     public DseGSSAPIAuthProvider(String saslProtocol) {
-        this(null, saslProtocol);
+        this((Configuration) null, saslProtocol);
     }
 
     /**
@@ -161,11 +163,26 @@ public class DseGSSAPIAuthProvider implements AuthProvider {
     public DseGSSAPIAuthProvider(Configuration loginConfiguration, String saslProtocol) {
         this.loginConfiguration = loginConfiguration;
         this.saslProtocol = saslProtocol;
+        this.subject = null;
+    }
+
+    public DseGSSAPIAuthProvider(Subject subject) {
+        this(subject, null);
+    }
+
+    public DseGSSAPIAuthProvider(Subject subject, String saslProtocol) {
+        this.loginConfiguration = null;
+        this.saslProtocol = saslProtocol;
+        this.subject = subject;
     }
 
     @Override
     public Authenticator newAuthenticator(InetSocketAddress host, String authenticator) throws AuthenticationException {
-        return new GSSAPIAuthenticator(authenticator, host, loginConfiguration, saslProtocol);
+        if (subject != null) {
+            return new GSSAPIAuthenticator(authenticator, host, subject, saslProtocol);
+        } else {
+            return new GSSAPIAuthenticator(authenticator, host, loginConfiguration, saslProtocol);
+        }
     }
 
     private static class GSSAPIAuthenticator extends BaseDseAuthenticator {
@@ -200,6 +217,26 @@ public class DseGSSAPIAuthProvider implements AuthProvider {
                         null);
             } catch (LoginException e) {
                 throw new RuntimeException(e);
+            } catch (SaslException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+
+        private GSSAPIAuthenticator(String authenticator, InetSocketAddress host, Subject subject, String saslProtocol) {
+            super(authenticator);
+            try {
+                String protocol = saslProtocol;
+                if (protocol == null) {
+                    protocol = System.getProperty(SASL_PROTOCOL_NAME_PROPERTY, DEFAULT_SASL_PROTOCOL_NAME);
+                }
+                this.subject = subject;
+                saslClient = Sasl.createSaslClient(SUPPORTED_MECHANISMS,
+                    null,
+                    protocol,
+                    host.getAddress().getCanonicalHostName(),
+                    DEFAULT_PROPERTIES,
+                    null);
             } catch (SaslException e) {
                 throw new RuntimeException(e);
             }
