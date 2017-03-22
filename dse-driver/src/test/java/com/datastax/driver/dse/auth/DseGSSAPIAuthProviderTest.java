@@ -23,6 +23,7 @@ import org.testng.annotations.Test;
 
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.Configuration;
+import javax.security.auth.login.LoginContext;
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
@@ -97,6 +98,23 @@ public class DseGSSAPIAuthProviderTest extends CCMDseTestsSupport {
         return configureCCM()
                 .withDSEConfiguration("kerberos_options.keytab", alternateKeytab.getAbsolutePath())
                 .withDSEConfiguration("kerberos_options.service_principal", alternateServicePrincipal);
+    }
+
+
+    /**
+     * Ensures that a Cluster can be established to a DSE server secured with Kerberos and that simple queries can
+     * be made using a Subject from a previously established LoginContext.
+     *
+     * @test_category dse:authentication
+     */
+    @Test(groups = "long")
+    public void should_authenticate_using_subject() throws Exception {
+        String protocol = "dse";
+        Configuration configuration = keytabClient(userKeytab, userPrincipal);
+        LoginContext login = new LoginContext("DseClient", null, null, configuration);
+        login.login();
+        AuthProvider auth = new DseGSSAPIAuthProvider(login.getSubject());
+        connectAndQuery(auth);
     }
 
     /**
